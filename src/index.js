@@ -8,7 +8,31 @@ export default {
       // GET / - List all characters
       if (method === "GET" && path === "/") {
         const { results } = await env.DB.prepare("SELECT * FROM personajes").all();
-        return Response.json(results);
+        const formattedResults = results.map(p => ({
+          ...p,
+          imagen: `/character/${encodeURIComponent(p.nombre)}/image`
+        }));
+        return Response.json(formattedResults);
+      }
+
+      // GET /character/:nombre/image - Serve character image
+      if (method === "GET" && path.startsWith("/character/") && path.endsWith("/image")) {
+        const nombre = decodeURIComponent(path.split("/")[2]);
+        const result = await env.DB.prepare("SELECT imagen FROM personajes WHERE nombre = ?").bind(nombre).first();
+        
+        if (!result || !result.imagen) {
+          return new Response("Image Not Found", { status: 404 });
+        }
+
+        // Convertimos el resultado a Uint8Array para asegurar que se envíe como binario puro
+        const binaryImageData = new Uint8Array(Object.values(result.imagen));
+
+        return new Response(binaryImageData, {
+          headers: {
+            "Content-Type": "image/webp",
+            "Cache-Control": "public, max-age=86400"
+          }
+        });
       }
 
       // GET /:id - Get character by ID (Assuming we might want to add an ID column or use nombre as key)
@@ -18,7 +42,12 @@ export default {
         const nombre = decodeURIComponent(path.split("/")[2]);
         const result = await env.DB.prepare("SELECT * FROM personajes WHERE nombre = ?").bind(nombre).first();
         if (!result) return new Response("Not Found", { status: 404 });
-        return Response.json(result);
+        
+        const formattedResult = {
+          ...result,
+          imagen: `/character/${encodeURIComponent(result.nombre)}/image`
+        };
+        return Response.json(formattedResult);
       }
 
       // POST / - Create character
